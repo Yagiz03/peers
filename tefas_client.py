@@ -198,6 +198,12 @@ def fetch_fund_allocation(
     df = _post(DIST_URL, body, DIST_FIELDS)
     if df.empty:
         return df
+    # The distribution endpoint ignores the fonKodu filter and returns every
+    # fund of this type for the date range, unlike the info endpoint - filter
+    # client-side.
+    df = df[df["FONKODU"] == fund_code]
+    if df.empty:
+        return df
     df = df.dropna(subset=["TARIH"]).sort_values("TARIH").reset_index(drop=True)
     return df
 
