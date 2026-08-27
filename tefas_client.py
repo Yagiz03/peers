@@ -185,6 +185,35 @@ def fetch_fund_history(
     return out
 
 
+def fetch_universe_history(
+    start: date,
+    end: date,
+    fund_type: str = "YAT",
+) -> pd.DataFrame:
+    """Daily price/size history for every fund of one type between start and
+    end (inclusive) - one request per 28-day chunk, regardless of how many
+    funds the caller ultimately needs. Confirmed empirically: passing no
+    fund code returns the whole ~2000-fund universe for the date range
+    instead of erroring or returning nothing.
+
+    Rendering a peer group by calling ``fetch_fund_history`` once per fund
+    hits TEFAS's per-IP rate limit past a handful of funds (empirically
+    ~4 requests before a 429/connection-reset); fetching the whole universe
+    once and filtering client-side by FONKODU avoids that regardless of
+    group size."""
+    frames = []
+    for chunk_start, chunk_end in _split_range(start, end):
+        body = _build_body(None, chunk_start, chunk_end, fund_type)
+        df = _post(INFO_URL, body, INFO_FIELDS)
+        if not df.empty:
+            frames.append(df)
+    if not frames:
+        return pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True)
+    out = out.dropna(subset=["TARIH"]).sort_values(["FONKODU", "TARIH"]).reset_index(drop=True)
+    return out
+
+
 def fetch_fund_allocation(
     fund_code: str,
     on: date,

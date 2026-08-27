@@ -26,14 +26,6 @@ CACHE_TTL = 30 * 60  # 30 minutes
 # --------------------------------------------------------------------------
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _history(fund_code: str, start: date, end: date, fund_type: str) -> pd.DataFrame:
-    try:
-        return tf.fetch_fund_history(fund_code, start, end, fund_type)
-    except Exception:
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _allocation(fund_code: str, on: date, fund_type: str) -> pd.DataFrame:
     try:
         return tf.fetch_fund_allocation(fund_code, on, fund_type)
@@ -41,11 +33,24 @@ def _allocation(fund_code: str, on: date, fund_type: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _universe_history(start: date, end: date, fund_type: str) -> pd.DataFrame:
+    try:
+        return tf.fetch_universe_history(start, end, fund_type)
+    except Exception:
+        return pd.DataFrame()
+
+
 def daily_table(group: PeerGroup, as_of: date) -> pd.DataFrame:
-    rows = []
+    # One request for the whole fund-type universe instead of one per fund -
+    # TEFAS rate-limits per IP after a handful of requests, so a 13-fund
+    # group like "Exotic Peers" would otherwise come back all N/A past the
+    # first few funds.
     start = as_of - timedelta(days=10)
+    universe = _universe_history(start, as_of, group.fund_type)
+    rows = []
     for code in group.funds:
-        hist = _history(code, start, as_of, group.fund_type)
+        hist = universe[universe["FONKODU"] == code] if not universe.empty else pd.DataFrame()
         daily_return, size, name = tf.compute_daily_return(hist)
         rows.append(
             {
@@ -62,9 +67,10 @@ def daily_table(group: PeerGroup, as_of: date) -> pd.DataFrame:
 
 
 def range_table(group: PeerGroup, start: date, end: date) -> pd.DataFrame:
+    universe = _universe_history(start, end, group.fund_type)
     rows = []
     for code in group.funds:
-        hist = _history(code, start, end, group.fund_type)
+        hist = universe[universe["FONKODU"] == code] if not universe.empty else pd.DataFrame()
         ret = tf.compute_range_return(hist)
         name = hist.iloc[-1]["FONUNVAN"] if not hist.empty else "N/A"
         rows.append({"FON KODU": code, "FON ADI": name, "GETİRİ": ret})
