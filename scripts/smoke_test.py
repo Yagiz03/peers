@@ -60,9 +60,8 @@ def main() -> None:
     print(tf.fetch_fund_bilgi("YAK"))
 
     print()
-    print("=== fund detail page pipeline: YAK, Jan1-to-today history + net flows ===")
-    jan1 = date(end.year, 1, 1)
-    yak_hist = tf.fetch_fund_history("YAK", jan1, end)
+    print("=== fund detail page pipeline: YAK flow history (targeted windows) + net flows ===")
+    yak_hist = tf.fetch_fund_flow_history("YAK", end)
     print("rows:", len(yak_hist))
     if not yak_hist.empty:
         last_idx = len(yak_hist) - 1

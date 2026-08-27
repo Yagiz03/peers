@@ -43,9 +43,9 @@ def _universe_history(start: date, end: date, fund_type: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _fund_history_single(fund_code: str, start: date, end: date, fund_type: str) -> pd.DataFrame:
+def _fund_flow_history(fund_code: str, as_of: date, fund_type: str) -> pd.DataFrame:
     try:
-        return tf.fetch_fund_history(fund_code, start, end, fund_type)
+        return tf.fetch_fund_flow_history(fund_code, as_of, fund_type)
     except Exception:
         return pd.DataFrame()
 
@@ -191,7 +191,6 @@ def render_fund_detail(code: str) -> None:
     code = code.upper()
     fund_type = find_fund_type(code)
     as_of = tf.last_business_day()
-    jan1 = date(as_of.year, 1, 1)
 
     if st.button("← Listeye dön"):
         st.query_params.clear()
@@ -203,7 +202,7 @@ def render_fund_detail(code: str) -> None:
     )
 
     with st.spinner("TEFAS'tan veri çekiliyor..."):
-        hist = _fund_history_single(code, jan1, as_of, fund_type)
+        hist = _fund_flow_history(code, as_of, fund_type)
         fees_df = _management_fees(fund_type)
         returns_df = _all_returns(fund_type)
         profile = _fund_profile(code)

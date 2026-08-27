@@ -353,6 +353,38 @@ def fetch_fund_bilgi(fund_code: str) -> dict:
     return rows[0] if rows else {}
 
 
+def fetch_fund_flow_history(
+    fund_code: str,
+    as_of: date,
+    fund_type: str = "YAT",
+) -> pd.DataFrame:
+    """Just enough single-fund history to compute daily/weekly/MTD/YTD net
+    flows: the last ~10 days plus a few days around the start of the
+    current month and the start of the year. Fetching the whole
+    Jan-1-to-today range would take ~9 sequential 28-day-chunk requests
+    just to get 3 anchor dates out of it - this targets those anchors
+    directly, cutting a fund's detail-page load to at most 3 requests
+    regardless of how late in the year it is."""
+    windows = [(as_of - timedelta(days=10), as_of)]
+    month_start = date(as_of.year, as_of.month, 1)
+    if month_start < windows[0][0]:
+        windows.append((month_start, month_start + timedelta(days=6)))
+    year_start = date(as_of.year, 1, 1)
+    if year_start < windows[-1][0]:
+        windows.append((year_start, year_start + timedelta(days=6)))
+
+    frames = []
+    for start, end in windows:
+        h = fetch_fund_history(fund_code, start, min(end, as_of), fund_type)
+        if not h.empty:
+            frames.append(h)
+    if not frames:
+        return pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True)
+    out = out.drop_duplicates(subset=["TARIH"]).sort_values("TARIH").reset_index(drop=True)
+    return out
+
+
 def compute_net_flow(history: pd.DataFrame, since_row_idx: int) -> float | None:
     """Net subscription/redemption money between ``history.iloc[since_row_idx]``
     and the last row, valued at the last row's price: standard
