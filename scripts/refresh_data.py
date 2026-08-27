@@ -26,12 +26,14 @@ import tefas_client as tf
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
-# Every fund_type actually used by a configured PeerGroup (see config.py).
-# Hardcoded rather than imported from config to keep this script runnable
-# even if config.py picks up a new fund_type later without needing a
-# matching edit here to go unnoticed - review config.py's PeerGroup
-# fund_type values when adding a new one.
-FUND_TYPES = ["YAT", "EMK"]
+# Every fund type TEFAS's own "Fon Verileri" menu exposes: Menkul Kıymet
+# Yatırım Fonları (YAT), Emeklilik Fonları (EMK), Borsa Yatırım Fonları
+# (BYF), Gayrimenkul Yatırım Fonları (GYF), Girişim Sermayesi Yatırım
+# Fonları (GSYF). Only YAT and EMK are used by a configured PeerGroup today
+# (see config.py), but pre-fetching all five now means the other three are
+# already cached and ready whenever a peer group needs them, instead of
+# waiting on a live TEFAS call the first time someone adds one.
+FUND_TYPES = ["YAT", "EMK", "BYF", "GYF", "GSYF"]
 
 
 def main() -> None:
