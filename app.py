@@ -207,7 +207,9 @@ def render_fund_detail(code: str) -> None:
         returns_df = _all_returns(fund_type)
         profile = _fund_profile(code)
         bilgi = _fund_bilgi(code)
-        alloc = _allocation(code, as_of, fund_type, lookback_days=30)
+        # TEFAS's allocation endpoint rejects windows wider than ~1 month
+        # ("Tarih aralığı 1 ayı aşamaz"); 27 days stays safely under that.
+        alloc = _allocation(code, as_of, fund_type, lookback_days=27)
 
     if hist.empty:
         st.warning(f"'{code}' için veri bulunamadı.")

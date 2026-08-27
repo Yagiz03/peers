@@ -74,7 +74,7 @@ def main() -> None:
 
     print()
     print("=== 30-day allocation for YAK (detail page table) ===")
-    alloc_30 = tf.fetch_fund_allocation("YAK", end, lookback_days=30)
+    alloc_30 = tf.fetch_fund_allocation("YAK", end, lookback_days=27)
     print("rows:", len(alloc_30))
     if not alloc_30.empty:
         numeric_cols = [c for c in alloc_30.columns if c not in ("TARIH", "FONKODU") and alloc_30[c].dtype.kind in "fi"]
