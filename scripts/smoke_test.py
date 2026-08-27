@@ -59,6 +59,17 @@ def main() -> None:
     print("=== fetch_fund_bilgi('YAK') ===")
     print(tf.fetch_fund_bilgi("YAK"))
 
+    print()
+    print("=== bulk history: INFO_URL with fonKodu=None (whole YAT universe, 1 day) ===")
+    body = tf._build_body(None, end, end, "YAT")
+    print("request body:", body)
+    df_all = tf._post(tf.INFO_URL, body, tf.INFO_FIELDS)
+    print("rows:", len(df_all))
+    if not df_all.empty:
+        print(df_all.head(3))
+        print("PKZ present:", (df_all["FONKODU"] == "PKZ").any())
+        print("YAK present:", (df_all["FONKODU"] == "YAK").any())
+
 
 if __name__ == "__main__":
     main()
