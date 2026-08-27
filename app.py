@@ -9,7 +9,9 @@ and a per-fund detail page (opened via the DETAY link in the daily table).
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -21,10 +23,50 @@ st.set_page_config(page_title="TEFAS Fon Getirileri", page_icon="📈", layout="
 
 CACHE_TTL = 30 * 60  # 30 minutes
 
+# TEFAS's own prices only change once a day (typically evening); a
+# scheduled GitHub Actions run (.github/workflows/data-refresh.yml) fetches
+# the day's data every 30 minutes from 08:00-10:00 Turkey time and commits
+# it here, so the app can read it directly instead of every visitor's page
+# load calling TEFAS live - which is what was tripping the rate limit.
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
 
 # --------------------------------------------------------------------------
 # Data access (cached)
 # --------------------------------------------------------------------------
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _snapshot_meta() -> dict:
+    path = DATA_DIR / "meta.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _snapshot_universe(fund_type: str) -> pd.DataFrame:
+    path = DATA_DIR / f"universe_{fund_type}.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path, parse_dates=["TARIH"])
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _snapshot_json(name: str) -> pd.DataFrame:
+    path = DATA_DIR / name
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_json(path, orient="records")
+    except Exception:
+        return pd.DataFrame()
+
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _allocation(fund_code: str, on: date, fund_type: str, lookback_days: int = 10) -> pd.DataFrame:
@@ -35,11 +77,21 @@ def _allocation(fund_code: str, on: date, fund_type: str, lookback_days: int = 1
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _universe_history(start: date, end: date, fund_type: str) -> pd.DataFrame:
+def _universe_history_live(start: date, end: date, fund_type: str) -> pd.DataFrame:
     try:
         return tf.fetch_universe_history(start, end, fund_type)
     except Exception:
         return pd.DataFrame()
+
+
+def _universe_history(start: date, end: date, fund_type: str) -> pd.DataFrame:
+    # Prefer the pre-fetched snapshot (covers the last 10 days as of its own
+    # refresh) over a live call - it already covers the daily table's usual
+    # window regardless of the exact start/end asked for here.
+    snap = _snapshot_universe(fund_type)
+    if not snap.empty:
+        return snap
+    return _universe_history_live(start, end, fund_type)
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
@@ -50,16 +102,30 @@ def _fund_flow_history(fund_code: str, as_of: date, fund_type: str) -> pd.DataFr
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _all_returns(fund_type: str) -> pd.DataFrame:
+    snap = _snapshot_json(f"returns_{fund_type}.json")
+    if not snap.empty:
+        return snap
+    return _all_returns_live(fund_type)
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _all_returns_live(fund_type: str) -> pd.DataFrame:
     try:
         return tf.fetch_all_fund_returns(fund_type)
     except Exception:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _management_fees(fund_type: str) -> pd.DataFrame:
+    snap = _snapshot_json(f"fees_{fund_type}.json")
+    if not snap.empty:
+        return snap
+    return _management_fees_live(fund_type)
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _management_fees_live(fund_type: str) -> pd.DataFrame:
     try:
         return tf.fetch_management_fees(fund_type)
     except Exception:
@@ -359,6 +425,10 @@ if not group.funds:
     st.stop()
 
 as_of = tf.last_business_day()
+
+meta = _snapshot_meta()
+if meta.get("fetched_at_utc"):
+    st.caption(f"Veri kaynağı: günlük önbellek (son güncelleme: {meta['fetched_at_utc']} UTC)")
 
 st.subheader(f"{group.name} - Günlük")
 
