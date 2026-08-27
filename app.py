@@ -1,10 +1,19 @@
 """TEFAS Fon Takip - Streamlit clone.
 
-Fetches live data from tefas.gov.tr's historical-data JSON endpoints
-(see tefas_client.py) for a configurable set of "peer groups" (config.py)
-and renders them the way the original ykpfontakip.streamlit.app does:
-a daily-return table, a date-range-return table, a YTD table per group,
-and a per-fund detail page (opened via the DETAY link in the daily table).
+Renders data for a configurable set of "peer groups" (config.py) the way
+the original ykpfontakip.streamlit.app does: a daily-return table, a
+date-range-return table, a YTD table per group, and a per-fund detail page
+(opened via the DETAY link in the daily table).
+
+The daily/YTD tables read from data/*.csv|json - a snapshot refreshed a
+few times each morning by .github/workflows/data-refresh.yml, since
+TEFAS's own prices only change once a day. That's a deliberate choice:
+every visitor's page load used to call tefas.gov.tr live, which tripped
+its per-IP rate limit past a handful of concurrent groups. Falls back to
+a live tefas_client call only when the snapshot file is missing (e.g. the
+very first deploy, before data-refresh has run once). The per-fund detail
+page and the date-range table stay live - they're opened rarely enough,
+one fund/range at a time, that pre-fetching them would be wasted work.
 """
 
 from __future__ import annotations
@@ -20,6 +29,25 @@ from config import CATEGORIES, PeerGroup, find_fund_type, find_group
 import tefas_client as tf
 
 st.set_page_config(page_title="TEFAS Fon Getirileri", page_icon="📈", layout="wide")
+
+# Tighter paddings/font sizes on narrow (phone) viewports - Streamlit's
+# defaults leave a lot of side margin and large headers that push tables
+# off-screen on a phone, forcing horizontal scrolling for every row.
+st.markdown(
+    """
+    <style>
+    @media (max-width: 640px) {
+        .block-container { padding: 0.75rem 0.5rem 2rem 0.5rem; }
+        h1 { font-size: 1.4rem !important; }
+        h3, h4 { font-size: 1.05rem !important; }
+        [data-testid="stMetricValue"] { font-size: 1.05rem; }
+        [data-testid="stMetricLabel"] { font-size: 0.75rem; }
+        [data-testid="stDataFrame"] { font-size: 0.85rem; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 CACHE_TTL = 30 * 60  # 30 minutes
 
@@ -141,6 +169,20 @@ def _fund_profile(fund_code: str) -> dict:
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _rank_change() -> dict:
+    # {group_name: {fund_code: delta}}, delta > 0 = moved up since the
+    # previous day. Written by scripts/refresh_data.py from its own
+    # snapshots - TEFAS's public API has no rank/rank-change field.
+    path = DATA_DIR / "rank_change.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _fund_bilgi(fund_code: str) -> dict:
     try:
         return tf.fetch_fund_bilgi(fund_code)
@@ -198,6 +240,7 @@ def ytd_table(group: PeerGroup, as_of: date, size_by_code: dict) -> pd.DataFrame
     # YTD (and other period) returns plus risk value for every fund at once.
     returns_df = _all_returns(group.fund_type)
     fees_df = _management_fees(group.fund_type)
+    rank_change = _rank_change().get(group.name, {})
 
     returns_by_code = {}
     if not returns_df.empty and "fonKodu" in returns_df.columns:
@@ -218,7 +261,7 @@ def ytd_table(group: PeerGroup, as_of: date, size_by_code: dict) -> pd.DataFrame
                 "YÖN. ÜCRETİ": applied_fee,
                 "BÜYÜKLÜK": size_by_code.get(code),
                 "YTD GETİRİ": r.get("getiriyb"),
-                "SIRA DEĞ.": None,
+                "SIRA DEĞ.": rank_change.get(code),
             }
         )
     df = pd.DataFrame(rows)
@@ -247,6 +290,13 @@ def fmt_price(v) -> str:
     if v is None or pd.isna(v):
         return "N/A"
     return f"{v:,.6f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def fmt_rank_change(v) -> str:
+    if v is None or pd.isna(v) or v == 0:
+        return "-"
+    v = int(v)
+    return f"▲{v}" if v > 0 else f"▼{-v}"
 
 
 # --------------------------------------------------------------------------
@@ -499,7 +549,7 @@ else:
     ydisp["YÖN. ÜCRETİ"] = ydf["YÖN. ÜCRETİ"].map(
         lambda v: "-" if v is None or pd.isna(v) else f"%{v:.2f}".replace(".", ",")
     )
-    ydisp["SIRA DEĞ."] = "-"
+    ydisp["SIRA DEĞ."] = ydf["SIRA DEĞ."].map(fmt_rank_change)
     st.dataframe(
         ydisp[["FON KODU", "FON ADI", "YÖN. ÜCRETİ", "BÜYÜKLÜK", "YTD GETİRİ", "SIRA DEĞ."]],
         use_container_width=True,

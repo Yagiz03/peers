@@ -48,7 +48,15 @@ CATEGORIES: list[Category] = [
                 ],
             ),
             PeerGroup("PKT Peers"),
-            PeerGroup("AZK-AZA Peers"),
+            PeerGroup(
+                "AZK-AZA Peers",
+                [
+                    "CHK", "GHF", "GEK", "EIG", "AZK", "BPG", "AZA", "AE2",
+                    "AEK", "HS1", "IEG", "AG1", "CGG", "AH1", "MEB", "BPF",
+                    "BEK", "MHG", "BGK", "VES",
+                ],
+                fund_type="EMK",
+            ),
             PeerGroup("AZL Peers"),
             PeerGroup("YBS Peers"),
             PeerGroup("YOT Peers"),

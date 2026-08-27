@@ -1,25 +1,41 @@
 """TEFAS (tefas.gov.tr) data-fetching layer.
 
 TEFAS does not publish an authenticated public API, but the fund-data page
-at tefas.gov.tr/tr/fon-verileri is backed by two JSON POST endpoints that
-the site's own frontend calls:
+at tefas.gov.tr/tr/fon-verileri is backed by JSON POST endpoints that the
+site's own frontend calls. All take a JSON body and return
+``{"resultList": [...]}`` or ``{"errorMessage": ...}``; no auth required.
 
-- fonGnlBlgSiraliGetir: daily price / size / investor-count per fund.
-- dagilimSiraliGetirT: daily asset-allocation breakdown per fund.
+Two "legacy-shaped" endpoints (posted via ``_post``) take a date range and
+optional fund code, and are used for price/allocation history:
 
-Both take a JSON body and return ``{"resultList": [...]}``. No auth
-required. TEFAS caps a single request at ~1 month of history, so longer
-ranges are split into 28-day chunks and concatenated.
+- fonGnlBlgSiraliGetir (INFO_URL): daily price/size/investor-count per
+  fund. Respects an empty fund code by returning the whole ~2000-fund
+  universe for the date range (see ``fetch_universe_history``) - TEFAS
+  caps a single request at ~1 month, so longer ranges are split into
+  28-day chunks and concatenated.
+- dagilimSiraliGetirT (DIST_URL): daily asset-allocation breakdown per
+  fund. Same ~1-month cap, but ignores the fund-code filter and always
+  returns every fund of that type - callers must filter client-side.
+
+The rest (posted via ``_post_funds_api``) are newer ``/api/funds/*``
+single-purpose endpoints with their own request shapes:
+
+- fonGetiriBazliBilgiGetir: 1M/3M/6M/YTD/1Y/3Y/5Y returns + risk value for
+  every fund of one type in one request.
+- fonYonetimBazliBilgiGetir: management-fee data for every fund of one
+  type in one request.
+- fonProfilBilgiGetir / fonBilgiGetir: per-fund profile / core info.
 
 Note: TEFAS previously exposed a legacy `/api/DB/BindHistoryInfo` endpoint
 (still referenced in older blog posts/scrapers); that endpoint now 404s.
-This module targets the endpoints currently in use.
+This module targets the endpoints currently in use, confirmed against
+live responses.
 """
 
 from __future__ import annotations
 
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import pandas as pd
 import requests

@@ -22,6 +22,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import config
 import tefas_client as tf
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -35,6 +36,55 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 # waiting on a live TEFAS call the first time someone adds one.
 FUND_TYPES = ["YAT", "EMK", "BYF", "GYF", "GSYF"]
 
+RANK_HISTORY_PATH_NAME = "rank_history.json"
+RANK_CHANGE_PATH_NAME = "rank_change.json"
+
+
+def _group_ranks(returns_by_type: dict) -> dict:
+    """YTD-return rank (1 = best) per configured peer group, keyed by
+    group name then fund code. Computed from this run's own
+    fonGetiriBazliBilgiGetir data - TEFAS's public API has no rank/rank-
+    change field, but the rank itself is just a sort we can do ourselves."""
+    ranks: dict[str, dict[str, int]] = {}
+    for category in config.CATEGORIES:
+        for group in category.groups:
+            if not group.funds:
+                continue
+            returns_df = returns_by_type.get(group.fund_type)
+            if returns_df is None or returns_df.empty or "fonKodu" not in returns_df.columns:
+                continue
+            sub = returns_df[returns_df["fonKodu"].isin(group.funds)]
+            sub = sub.sort_values("getiriyb", ascending=False, na_position="last")
+            ranks[group.name] = {code: i + 1 for i, code in enumerate(sub["fonKodu"])}
+    return ranks
+
+
+def _update_rank_change(today_str: str, today_ranks: dict) -> None:
+    """Diff today's per-group rank against the last *different calendar
+    day's* stored rank (not the last run - this job fires several times
+    each morning, and a rank "change" should mean day-over-day, not
+    run-over-run). Writes rank_change.json: {group: {code: delta}} where
+    delta > 0 means the fund moved up (better) since the previous day."""
+    history_path = DATA_DIR / RANK_HISTORY_PATH_NAME
+    history = json.loads(history_path.read_text()) if history_path.exists() else {}
+
+    if history.get("date") == today_str:
+        prev_ranks = history.get("prev_ranks", {})
+    else:
+        prev_ranks = history.get("ranks", {})
+
+    rank_change = {}
+    for gname, ranks in today_ranks.items():
+        prev_g = prev_ranks.get(gname, {})
+        rank_change[gname] = {
+            code: prev_g[code] - r for code, r in ranks.items() if code in prev_g
+        }
+    (DATA_DIR / RANK_CHANGE_PATH_NAME).write_text(json.dumps(rank_change, ensure_ascii=False))
+
+    history_path.write_text(
+        json.dumps({"date": today_str, "ranks": today_ranks, "prev_ranks": prev_ranks}, ensure_ascii=False)
+    )
+
 
 def main() -> None:
     DATA_DIR.mkdir(exist_ok=True)
@@ -42,12 +92,14 @@ def main() -> None:
     start = as_of - timedelta(days=10)
 
     counts = {}
+    returns_by_type = {}
     for ftype in FUND_TYPES:
         universe = tf.fetch_universe_history(start, as_of, ftype)
         universe.to_csv(DATA_DIR / f"universe_{ftype}.csv", index=False)
 
         returns = tf.fetch_all_fund_returns(ftype)
         returns.to_json(DATA_DIR / f"returns_{ftype}.json", orient="records")
+        returns_by_type[ftype] = returns
 
         fees = tf.fetch_management_fees(ftype)
         fees.to_json(DATA_DIR / f"fees_{ftype}.json", orient="records")
@@ -58,6 +110,8 @@ def main() -> None:
             "fees_rows": len(fees),
         }
         print(f"{ftype}: {counts[ftype]}")
+
+    _update_rank_change(as_of.isoformat(), _group_ranks(returns_by_type))
 
     meta = {
         "as_of": as_of.isoformat(),
