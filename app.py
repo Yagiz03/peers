@@ -238,37 +238,48 @@ else:
     st.caption("Varlık dağılımı ve detay için bir fon seçin.")
     picked = st.selectbox("Fon", options=group.funds, key="alloc_pick")
 
-    with st.expander(f"{picked} - DETAY"):
-        with st.spinner("Detay bilgisi çekiliyor..."):
-            bilgi = _fund_bilgi(picked)
-            profile = _fund_profile(picked)
-            returns_row = {}
-            all_returns_df = _all_returns(group.fund_type)
-            if not all_returns_df.empty and "fonKodu" in all_returns_df.columns:
-                match = all_returns_df[all_returns_df["fonKodu"] == picked]
-                if not match.empty:
-                    returns_row = match.iloc[0].to_dict()
+    # A `with st.expander(...):` body runs on every rerun regardless of
+    # whether it's collapsed - only gating the fetch behind an explicit
+    # button keeps a page visit from silently firing 2 extra per-fund
+    # requests (fonBilgiGetir, fonProfilBilgiGetir) nobody asked for. That
+    # unconditional cost, multiplied across this and the date-range section
+    # below, was tipping groups over TEFAS's rate limit.
+    detay_open_key = f"detay_open_{group.name}"
+    if st.button(f"{picked} - DETAY", key=f"detay_btn_{picked}_{group.name}"):
+        st.session_state[detay_open_key] = picked if st.session_state.get(detay_open_key) != picked else None
 
-        if not bilgi and not profile and not returns_row:
-            st.info("Detay verisi bulunamadı.")
-        else:
-            d1, d2, d3 = st.columns(3)
-            d1.metric("Kategori", bilgi.get("fonKategori") or "-")
-            risk = profile.get("riskDegeri") or returns_row.get("riskDegeri")
-            d2.metric("Risk Değeri", str(risk) if risk else "-")
-            d3.metric("ISIN", profile.get("isinKodu") or "-")
+    if st.session_state.get(detay_open_key) == picked:
+        with st.container(border=True):
+            with st.spinner("Detay bilgisi çekiliyor..."):
+                bilgi = _fund_bilgi(picked)
+                profile = _fund_profile(picked)
+                returns_row = {}
+                all_returns_df = _all_returns(group.fund_type)
+                if not all_returns_df.empty and "fonKodu" in all_returns_df.columns:
+                    match = all_returns_df[all_returns_df["fonKodu"] == picked]
+                    if not match.empty:
+                        returns_row = match.iloc[0].to_dict()
 
-            e1, e2, e3, e4 = st.columns(4)
-            e1.metric("1A Getiri", fmt_pct(returns_row.get("getiri1a")))
-            e2.metric("3A Getiri", fmt_pct(returns_row.get("getiri3a")))
-            e3.metric("6A Getiri", fmt_pct(returns_row.get("getiri6a")))
-            e4.metric("1Y Getiri", fmt_pct(returns_row.get("getiri1y")))
+            if not bilgi and not profile and not returns_row:
+                st.info("Detay verisi bulunamadı.")
+            else:
+                d1, d2, d3 = st.columns(3)
+                d1.metric("Kategori", bilgi.get("fonKategori") or "-")
+                risk = profile.get("riskDegeri") or returns_row.get("riskDegeri")
+                d2.metric("Risk Değeri", str(risk) if risk else "-")
+                d3.metric("ISIN", profile.get("isinKodu") or "-")
 
-            f1, f2 = st.columns(2)
-            f1.write(f"**Giriş Komisyonu:** {profile.get('girisKomisyonu', '-')}")
-            f2.write(f"**Çıkış Komisyonu:** {profile.get('cikisKomisyonu', '-')}")
-            if profile.get("kapLink"):
-                st.markdown(f"[KAP sayfası]({profile['kapLink']})")
+                e1, e2, e3, e4 = st.columns(4)
+                e1.metric("1A Getiri", fmt_pct(returns_row.get("getiri1a")))
+                e2.metric("3A Getiri", fmt_pct(returns_row.get("getiri3a")))
+                e3.metric("6A Getiri", fmt_pct(returns_row.get("getiri6a")))
+                e4.metric("1Y Getiri", fmt_pct(returns_row.get("getiri1y")))
+
+                f1, f2 = st.columns(2)
+                f1.write(f"**Giriş Komisyonu:** {profile.get('girisKomisyonu', '-')}")
+                f2.write(f"**Çıkış Komisyonu:** {profile.get('cikisKomisyonu', '-')}")
+                if profile.get("kapLink"):
+                    st.markdown(f"[KAP sayfası]({profile['kapLink']})")
 
     if show_allocation_change:
         earlier = as_of - timedelta(days=30)
@@ -321,15 +332,27 @@ with st.expander("Tarih Aralığı Seç"):
     range_end = c2.date_input("Bitiş", value=as_of, max_value=as_of, key="range_end")
     if range_start >= range_end:
         st.error("Başlangıç tarihi bitiş tarihinden önce olmalı.")
-    else:
-        with st.spinner("Hesaplanıyor..."):
-            rdf = range_table(group, range_start, range_end)
+    # Only fetch on explicit request - an expander's body runs on every
+    # rerun even while collapsed, so computing this unconditionally meant a
+    # default 30-day span (2 request chunks) fired on every single page
+    # visit, whether or not anyone opened this section.
+    elif st.button("Getiriyi Hesapla", key="range_calc_btn"):
+        st.session_state["range_result"] = (
+            (group.name, range_start, range_end),
+            range_table(group, range_start, range_end),
+        )
+
+    cached_range = st.session_state.get("range_result")
+    if cached_range and cached_range[0] == (group.name, range_start, range_end):
+        rdf = cached_range[1]
         if rdf.empty:
             st.warning("Veri alınamadı.")
         else:
             rdisp = rdf.copy()
             rdisp["GETİRİ"] = rdf["GETİRİ"].map(fmt_pct)
             st.dataframe(rdisp, use_container_width=True, hide_index=True)
+    elif range_start < range_end:
+        st.caption("Hesaplamak için tarih aralığı seçip **Getiriyi Hesapla**'ya tıklayın.")
 
 st.divider()
 

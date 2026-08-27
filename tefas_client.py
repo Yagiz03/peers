@@ -109,12 +109,34 @@ def _parse_date_field(v) -> pd.Timestamp | None:
         return None
 
 
-def _post(url: str, body: dict, field_map: dict, timeout: int = REQUEST_TIMEOUT) -> pd.DataFrame:
-    resp = requests.post(url, json=body, headers=HEADERS, timeout=timeout)
-    resp.raise_for_status()
-    payload = resp.json()
+def _post(
+    url: str,
+    body: dict,
+    field_map: dict,
+    timeout: int = REQUEST_TIMEOUT,
+    max_retries: int = 2,
+) -> pd.DataFrame:
+    """POST to a legacy-shaped TEFAS endpoint (INFO_URL/DIST_URL) and parse
+    its resultList. Retries once on a transient network error or 429 - since
+    these endpoints are now used for whole-universe fetches shared by an
+    entire peer group, a single unhandled failure here would blank out
+    every fund in the group instead of just one."""
+    payload = None
+    for attempt in range(max_retries):
+        if attempt > 0:
+            time.sleep(2)
+        try:
+            resp = requests.post(url, json=body, headers=HEADERS, timeout=timeout)
+            if resp.status_code == 429:
+                continue
+            resp.raise_for_status()
+            payload = resp.json()
+            break
+        except (requests.exceptions.RequestException, ValueError):
+            continue
+    if payload is None:
+        return pd.DataFrame()
 
-    err_msg = payload.get("errorMessage") or payload.get("errorCode")
     rows = payload.get("resultList") or []
     if not rows:
         return pd.DataFrame()
