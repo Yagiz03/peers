@@ -238,11 +238,18 @@ def _post_funds_api(
     for attempt in range(max_retries):
         if attempt > 0:
             time.sleep(2)
-        resp = requests.post(url, json=payload, headers=HEADERS, timeout=timeout)
-        if resp.status_code == 429:
+        try:
+            resp = requests.post(url, json=payload, headers=HEADERS, timeout=timeout)
+            if resp.status_code == 429:
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.exceptions.RequestException, ValueError):
+            # Network hiccup, timeout, or non-JSON body - retry, then give up
+            # quietly. TEFAS tends to stall/reset connections after several
+            # requests in quick succession; a crash here shouldn't take down
+            # a page that only needed this data as a supplement.
             continue
-        resp.raise_for_status()
-        data = resp.json()
         if data.get("errorMessage"):
             return []
         return data.get("resultList") or []
