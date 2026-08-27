@@ -60,6 +60,29 @@ def main() -> None:
     print(tf.fetch_fund_bilgi("YAK"))
 
     print()
+    print("=== fund detail page pipeline: YAK, Jan1-to-today history + net flows ===")
+    jan1 = date(end.year, 1, 1)
+    yak_hist = tf.fetch_fund_history("YAK", jan1, end)
+    print("rows:", len(yak_hist))
+    if not yak_hist.empty:
+        last_idx = len(yak_hist) - 1
+        gunluk_idx = last_idx - 1 if last_idx >= 1 else None
+        haftalik_idx = tf.find_row_on_or_before(yak_hist, end - timedelta(days=7))
+        yil_basi_idx = 0 if last_idx >= 1 else None
+        print("gunluk net giris:", tf.compute_net_flow(yak_hist, gunluk_idx) if gunluk_idx is not None else None)
+        print("haftalik net giris:", tf.compute_net_flow(yak_hist, haftalik_idx) if haftalik_idx is not None else None)
+        print("yilbasindan net giris:", tf.compute_net_flow(yak_hist, yil_basi_idx) if yil_basi_idx is not None else None)
+
+    print()
+    print("=== 30-day allocation for YAK (detail page table) ===")
+    alloc_30 = tf.fetch_fund_allocation("YAK", end, lookback_days=30)
+    print("rows:", len(alloc_30))
+    if not alloc_30.empty:
+        numeric_cols = [c for c in alloc_30.columns if c not in ("TARIH", "FONKODU") and alloc_30[c].dtype.kind in "fi"]
+        nonzero_cols = [c for c in numeric_cols if (alloc_30[c].fillna(0) != 0).any()]
+        print("nonzero asset columns:", nonzero_cols)
+
+    print()
     print("=== bulk history: INFO_URL with fonKodu=None (whole YAT universe, 1 day) ===")
     body = tf._build_body(None, end, end, "YAT")
     print("request body:", body)
