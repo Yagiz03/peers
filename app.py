@@ -113,11 +113,13 @@ def _universe_history_live(start: date, end: date, fund_type: str) -> pd.DataFra
 
 
 def _universe_history(start: date, end: date, fund_type: str) -> pd.DataFrame:
-    # Prefer the pre-fetched snapshot (covers the last 10 days as of its own
-    # refresh) over a live call - it already covers the daily table's usual
-    # window regardless of the exact start/end asked for here.
+    # Prefer the pre-fetched snapshot over a live call, but only when it
+    # actually covers the requested start date - the snapshot is just a
+    # fixed trailing ~10-day window as of its own refresh, so a wider,
+    # user-picked range (the date-range section) would otherwise silently
+    # get computed over that narrow window instead of the range asked for.
     snap = _snapshot_universe(fund_type)
-    if not snap.empty:
+    if not snap.empty and pd.Timestamp(start) >= snap["TARIH"].min():
         return snap
     return _universe_history_live(start, end, fund_type)
 
@@ -571,7 +573,7 @@ else:
 st.caption(
     "Veriler tefas.gov.tr üzerinden çekilmektedir (fonGnlBlgSiraliGetir, "
     "dagilimSiraliGetirT, fonGetiriBazliBilgiGetir, fonYonetimBazliBilgiGetir, "
-    "fonProfilBilgiGetir, fonBilgiGetir uçları). Brüt getiri ve sıra değişimi "
-    "gibi bazı alanlar TEFAS'ın herkese açık servislerinde yer almadığı için "
-    "gösterilmemektedir."
+    "fonProfilBilgiGetir, fonBilgiGetir uçları). Brüt getiri TEFAS'ın herkese "
+    "açık servislerinde yer almadığı için gösterilmemektedir; sıra değişimi ise "
+    "günlük anlık görüntülerden kendi hesapladığımız bir değerdir."
 )
