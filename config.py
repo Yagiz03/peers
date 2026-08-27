@@ -85,7 +85,13 @@ CATEGORIES: list[Category] = [
     Category(
         "EXOTICS",
         [
-            PeerGroup("Exotic Peers"),
+            PeerGroup(
+                "Exotic Peers",
+                [
+                    "PKZ", "PCS", "THF", "PHE", "LTL", "TLY", "PUK",
+                    "VPS", "DFI", "TP2", "PRY", "MT2", "PBR",
+                ],
+            ),
         ],
     ),
     Category(
