@@ -353,6 +353,35 @@ def fetch_fund_bilgi(fund_code: str) -> dict:
     return rows[0] if rows else {}
 
 
+def compute_net_flow(history: pd.DataFrame, since_row_idx: int) -> float | None:
+    """Net subscription/redemption money between ``history.iloc[since_row_idx]``
+    and the last row, valued at the last row's price: standard
+    ``(units_now - units_then) * price_now`` - separates actual money flow
+    from price appreciation, unlike a raw portfolio-size delta."""
+    if history is None or history.empty or since_row_idx < 0 or since_row_idx >= len(history):
+        return None
+    last = history.iloc[-1]
+    then = history.iloc[since_row_idx]
+    units_now = last.get("TEDPAYSAYISI")
+    units_then = then.get("TEDPAYSAYISI")
+    price_now = last.get("FIYAT")
+    if units_now is None or units_then is None or price_now is None:
+        return None
+    return (units_now - units_then) * price_now
+
+
+def find_row_on_or_before(history: pd.DataFrame, on: date) -> int | None:
+    """Index of the last row in an ascending-by-TARIH history whose date is
+    <= ``on``, or None if every row is after it."""
+    if history is None or history.empty:
+        return None
+    cutoff = pd.Timestamp(on)
+    eligible = history.index[history["TARIH"] <= cutoff]
+    if len(eligible) == 0:
+        return None
+    return int(eligible[-1])
+
+
 def last_business_day(today: date | None = None) -> date:
     d = today or date.today()
     while d.weekday() >= 5:  # 5=Sat, 6=Sun

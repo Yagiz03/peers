@@ -144,3 +144,14 @@ def find_group(group_name: str) -> PeerGroup | None:
             if group.name == group_name:
                 return group
     return None
+
+
+def find_fund_type(fund_code: str) -> str:
+    """Fund type ("YAT"/"EMK") for a code, looked up from whichever
+    configured group first lists it. Defaults to "YAT" if the code isn't in
+    any group (e.g. reached via a hand-edited URL)."""
+    for category in CATEGORIES:
+        for group in category.groups:
+            if fund_code in group.funds:
+                return group.fund_type
+    return "YAT"
