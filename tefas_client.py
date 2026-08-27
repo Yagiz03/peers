@@ -18,6 +18,7 @@ This module targets the endpoints currently in use.
 
 from __future__ import annotations
 
+import time
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -206,6 +207,92 @@ def fetch_fund_allocation(
         return df
     df = df.dropna(subset=["TARIH"]).sort_values("TARIH").reset_index(drop=True)
     return df
+
+
+def parse_turkish_decimal(value) -> float | None:
+    """Parse a Turkish-locale decimal string (comma separator), e.g. "2,2"."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    try:
+        return float(value.replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
+def _post_funds_api(
+    endpoint: str,
+    payload: dict,
+    max_retries: int = 2,
+    timeout: int = REQUEST_TIMEOUT,
+) -> list[dict]:
+    """POST to a TEFAS ``/api/funds/*`` endpoint and return its resultList.
+
+    A short-lived retry (not the ~45s backoff some scrapers use, which would
+    freeze the app) covers a transient 429; a persistent rate limit just
+    yields an empty list so callers degrade to "-" instead of hanging.
+    """
+    url = f"{BASE_URL}/api/funds/{endpoint}"
+    for attempt in range(max_retries):
+        if attempt > 0:
+            time.sleep(2)
+        resp = requests.post(url, json=payload, headers=HEADERS, timeout=timeout)
+        if resp.status_code == 429:
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("errorMessage"):
+            return []
+        return data.get("resultList") or []
+    return []
+
+
+def fetch_all_fund_returns(fund_type: str = "YAT") -> pd.DataFrame:
+    """All funds of one type with 1A/3A/6A/YTD/1Y/3Y/5Y returns and risk
+    value in a single request (``fonGetiriBazliBilgiGetir``). Filter the
+    result client-side by fund code - this is far cheaper than one request
+    per fund when rendering a whole peer group."""
+    rows = _post_funds_api(
+        "fonGetiriBazliBilgiGetir",
+        {
+            "fonTipi": fund_type,
+            "dil": "TR",
+            "calismaTipi": 2,
+            "donemGetiri1a": "1",
+            "donemGetiri3a": "1",
+            "donemGetiri6a": "1",
+            "donemGetiriyb": "1",
+            "donemGetiri1y": "1",
+            "donemGetiri3y": "1",
+            "donemGetiri5y": "1",
+        },
+    )
+    return pd.DataFrame(rows)
+
+
+def fetch_management_fees(fund_type: str = "YAT") -> pd.DataFrame:
+    """All funds of one type with management-fee data
+    (``fonYonetimBazliBilgiGetir``): applied fee, prospectus fee, max
+    expense ratio."""
+    rows = _post_funds_api("fonYonetimBazliBilgiGetir", {"fonTipi": fund_type, "dil": "TR"})
+    return pd.DataFrame(rows)
+
+
+def fetch_fund_profile(fund_code: str) -> dict:
+    """Per-fund profile (``fonProfilBilgiGetir``): ISIN, KAP link, trading
+    hours/valor, entry/exit fees, TEFAS status. Empty dict if unavailable."""
+    rows = _post_funds_api("fonProfilBilgiGetir", {"fonKodu": fund_code, "dil": "TR"})
+    return rows[0] if rows else {}
+
+
+def fetch_fund_bilgi(fund_code: str) -> dict:
+    """Per-fund core info (``fonBilgiGetir``): name, price, size, investor
+    count, category, category rank, market share. Empty dict if
+    unavailable."""
+    rows = _post_funds_api("fonBilgiGetir", {"fonKodu": fund_code})
+    return rows[0] if rows else {}
 
 
 def last_business_day(today: date | None = None) -> date:

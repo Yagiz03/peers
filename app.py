@@ -74,21 +74,64 @@ def range_table(group: PeerGroup, start: date, end: date) -> pd.DataFrame:
     return df
 
 
-def ytd_table(group: PeerGroup, as_of: date) -> pd.DataFrame:
-    jan1 = date(as_of.year, 1, 1)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _all_returns(fund_type: str) -> pd.DataFrame:
+    try:
+        return tf.fetch_all_fund_returns(fund_type)
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _management_fees(fund_type: str) -> pd.DataFrame:
+    try:
+        return tf.fetch_management_fees(fund_type)
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _fund_profile(fund_code: str) -> dict:
+    try:
+        return tf.fetch_fund_profile(fund_code)
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _fund_bilgi(fund_code: str) -> dict:
+    try:
+        return tf.fetch_fund_bilgi(fund_code)
+    except Exception:
+        return {}
+
+
+def ytd_table(group: PeerGroup, as_of: date, size_by_code: dict) -> pd.DataFrame:
+    # One request for all funds of this type instead of one per fund - TEFAS
+    # rate-limits aggressively, and fonGetiriBazliBilgiGetir already returns
+    # YTD (and other period) returns plus risk value for every fund at once.
+    returns_df = _all_returns(group.fund_type)
+    fees_df = _management_fees(group.fund_type)
+
+    returns_by_code = {}
+    if not returns_df.empty and "fonKodu" in returns_df.columns:
+        returns_by_code = {r["fonKodu"]: r for r in returns_df.to_dict("records")}
+    fees_by_code = {}
+    if not fees_df.empty and "fonKodu" in fees_df.columns:
+        fees_by_code = {r["fonKodu"]: r for r in fees_df.to_dict("records")}
+
     rows = []
     for code in group.funds:
-        hist = _history(code, jan1, as_of, group.fund_type)
-        ret = tf.compute_range_return(hist)
-        size = hist.iloc[-1]["PORTFOYBUYUKLUK"] if not hist.empty else None
-        name = hist.iloc[-1]["FONUNVAN"] if not hist.empty else "N/A"
+        r = returns_by_code.get(code, {})
+        fee = fees_by_code.get(code, {})
+        applied_fee = tf.parse_turkish_decimal(fee.get("uygulananYu1Y")) if fee else None
         rows.append(
             {
                 "FON KODU": code,
-                "FON ADI": name,
-                "YÖN. ÜCRETİ": None,
-                "BÜYÜKLÜK": size,
-                "YTD GETİRİ": ret,
+                "FON ADI": r.get("fonUnvan", "N/A"),
+                "YÖN. ÜCRETİ": applied_fee,
+                "BÜYÜKLÜK": size_by_code.get(code),
+                "YTD GETİRİ": r.get("getiriyb"),
                 "SIRA DEĞ.": None,
             }
         )
@@ -186,8 +229,41 @@ else:
     display_df["GÜNLÜK GETİRİ"] = daily_df["GÜNLÜK GETİRİ"].map(fmt_pct)
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    st.caption("Varlık dağılımı (ve isteğe bağlı değişim) için bir fon seçin.")
+    st.caption("Varlık dağılımı ve detay için bir fon seçin.")
     picked = st.selectbox("Fon", options=group.funds, key="alloc_pick")
+
+    with st.expander(f"{picked} - DETAY"):
+        with st.spinner("Detay bilgisi çekiliyor..."):
+            bilgi = _fund_bilgi(picked)
+            profile = _fund_profile(picked)
+            returns_row = {}
+            all_returns_df = _all_returns(group.fund_type)
+            if not all_returns_df.empty and "fonKodu" in all_returns_df.columns:
+                match = all_returns_df[all_returns_df["fonKodu"] == picked]
+                if not match.empty:
+                    returns_row = match.iloc[0].to_dict()
+
+        if not bilgi and not profile and not returns_row:
+            st.info("Detay verisi bulunamadı.")
+        else:
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Kategori", bilgi.get("fonKategori") or "-")
+            risk = profile.get("riskDegeri") or returns_row.get("riskDegeri")
+            d2.metric("Risk Değeri", str(risk) if risk else "-")
+            d3.metric("ISIN", profile.get("isinKodu") or "-")
+
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric("1A Getiri", fmt_pct(returns_row.get("getiri1a")))
+            e2.metric("3A Getiri", fmt_pct(returns_row.get("getiri3a")))
+            e3.metric("6A Getiri", fmt_pct(returns_row.get("getiri6a")))
+            e4.metric("1Y Getiri", fmt_pct(returns_row.get("getiri1y")))
+
+            f1, f2 = st.columns(2)
+            f1.write(f"**Giriş Komisyonu:** {profile.get('girisKomisyonu', '-')}")
+            f2.write(f"**Çıkış Komisyonu:** {profile.get('cikisKomisyonu', '-')}")
+            if profile.get("kapLink"):
+                st.markdown(f"[KAP sayfası]({profile['kapLink']})")
+
     if show_allocation_change:
         earlier = as_of - timedelta(days=30)
         alloc_hist = _allocation(picked, as_of, group.fund_type)
@@ -252,15 +328,20 @@ with st.expander("Tarih Aralığı Seç"):
 st.divider()
 
 st.subheader(f"{group.name} - YTD")
+size_by_code = (
+    dict(zip(daily_df["FON KODU"], daily_df["BÜYÜKLÜK"])) if not daily_df.empty else {}
+)
 with st.spinner("YTD hesaplanıyor..."):
-    ydf = ytd_table(group, as_of)
+    ydf = ytd_table(group, as_of, size_by_code)
 if ydf.empty:
     st.warning("Veri alınamadı.")
 else:
     ydisp = ydf.copy()
     ydisp["BÜYÜKLÜK"] = ydf["BÜYÜKLÜK"].map(fmt_size)
     ydisp["YTD GETİRİ"] = ydf["YTD GETİRİ"].map(fmt_pct)
-    ydisp["YÖN. ÜCRETİ"] = "-"
+    ydisp["YÖN. ÜCRETİ"] = ydf["YÖN. ÜCRETİ"].map(
+        lambda v: "-" if v is None or pd.isna(v) else f"%{v:.2f}".replace(".", ",")
+    )
     ydisp["SIRA DEĞ."] = "-"
     st.dataframe(
         ydisp[["FON KODU", "FON ADI", "YÖN. ÜCRETİ", "BÜYÜKLÜK", "YTD GETİRİ", "SIRA DEĞ."]],
@@ -269,8 +350,9 @@ else:
     )
 
 st.caption(
-    "Veriler tefas.gov.tr üzerinden çekilmektedir (BindHistoryInfo / "
-    "BindHistoryAllocation uçları). Yönetim ücreti ve brüt getiri gibi bazı "
-    "alanlar TEFAS'ın herkese açık geçmiş veri servisinde yer almadığı için "
+    "Veriler tefas.gov.tr üzerinden çekilmektedir (fonGnlBlgSiraliGetir, "
+    "dagilimSiraliGetirT, fonGetiriBazliBilgiGetir, fonYonetimBazliBilgiGetir, "
+    "fonProfilBilgiGetir, fonBilgiGetir uçları). Brüt getiri ve sıra değişimi "
+    "gibi bazı alanlar TEFAS'ın herkese açık servislerinde yer almadığı için "
     "gösterilmemektedir."
 )

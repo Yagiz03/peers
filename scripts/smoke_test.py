@@ -35,6 +35,30 @@ def main() -> None:
     print(hist_emk)
     print("columns:", list(hist_emk.columns))
 
+    print()
+    print("=== fetch_all_fund_returns('YAT') filtered to YAK ===")
+    returns_df = tf.fetch_all_fund_returns("YAT")
+    print("total rows:", len(returns_df))
+    if not returns_df.empty:
+        row = returns_df[returns_df["fonKodu"] == "YAK"]
+        print(row.to_dict("records"))
+
+    print()
+    print("=== fetch_management_fees('YAT') filtered to YAK ===")
+    fees_df = tf.fetch_management_fees("YAT")
+    print("total rows:", len(fees_df))
+    if not fees_df.empty:
+        row = fees_df[fees_df["fonKodu"] == "YAK"]
+        print(row.to_dict("records"))
+
+    print()
+    print("=== fetch_fund_profile('YAK') ===")
+    print(tf.fetch_fund_profile("YAK"))
+
+    print()
+    print("=== fetch_fund_bilgi('YAK') ===")
+    print(tf.fetch_fund_bilgi("YAK"))
+
 
 if __name__ == "__main__":
     main()
