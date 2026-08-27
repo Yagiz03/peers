@@ -37,8 +37,8 @@ st.markdown(
     """
     <style>
     @media (max-width: 640px) {
-        .block-container { padding: 0.75rem 0.5rem 2rem 0.5rem; }
-        h1 { font-size: 1.4rem !important; }
+        .block-container { padding: 3.5rem 0.5rem 2rem 0.5rem; }
+        h1 { font-size: 1.3rem !important; }
         h3, h4 { font-size: 1.05rem !important; }
         [data-testid="stMetricValue"] { font-size: 1.05rem; }
         [data-testid="stMetricLabel"] { font-size: 0.75rem; }
@@ -496,7 +496,11 @@ else:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "DETAY": st.column_config.LinkColumn("DETAY", display_text="DETAY"),
+            "FON KODU": st.column_config.TextColumn("FON KODU", width="small"),
+            "FON ADI": st.column_config.TextColumn("FON ADI", width="small"),
+            "BÜYÜKLÜK": st.column_config.TextColumn("BÜYÜKLÜK", width="small"),
+            "GÜNLÜK GETİRİ": st.column_config.TextColumn("GÜNLÜK GETİRİ", width="small"),
+            "DETAY": st.column_config.LinkColumn("DETAY", display_text="DETAY", width="small"),
         },
     )
 
@@ -554,6 +558,14 @@ else:
         ydisp[["FON KODU", "FON ADI", "YÖN. ÜCRETİ", "BÜYÜKLÜK", "YTD GETİRİ", "SIRA DEĞ."]],
         use_container_width=True,
         hide_index=True,
+        column_config={
+            "FON KODU": st.column_config.TextColumn("FON KODU", width="small"),
+            "FON ADI": st.column_config.TextColumn("FON ADI", width="small"),
+            "YÖN. ÜCRETİ": st.column_config.TextColumn("YÖN. ÜCRETİ", width="small"),
+            "BÜYÜKLÜK": st.column_config.TextColumn("BÜYÜKLÜK", width="small"),
+            "YTD GETİRİ": st.column_config.TextColumn("YTD GETİRİ", width="small"),
+            "SIRA DEĞ.": st.column_config.TextColumn("SIRA DEĞ.", width="small"),
+        },
     )
 
 st.caption(
