@@ -1,6 +1,6 @@
 {
   "as_of": "2026-10-09",
-  "fetched_at_utc": "2026-10-09T11:35:35Z",
+  "fetched_at_utc": "2026-10-10T10:57:51Z",
   "counts": {
     "YAT": {
       "universe_rows": 18285,
@@ -8,23 +8,23 @@
       "fees_rows": 2097
     },
     "EMK": {
-      "universe_rows": 3600,
+      "universe_rows": 0,
       "returns_rows": 402,
-      "fees_rows": 400
+      "fees_rows": 0
     },
     "BYF": {
       "universe_rows": 323,
-      "returns_rows": 37,
+      "returns_rows": 0,
       "fees_rows": 37
     },
     "GYF": {
-      "universe_rows": 2321,
+      "universe_rows": 0,
       "returns_rows": 332,
       "fees_rows": 0
     },
     "GSYF": {
       "universe_rows": 4884,
-      "returns_rows": 592,
+      "returns_rows": 0,
       "fees_rows": 0
     }
   }
