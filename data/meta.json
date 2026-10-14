@@ -1,29 +1,29 @@
 {
-  "as_of": "2026-10-13",
-  "fetched_at_utc": "2026-10-13T12:26:50Z",
+  "as_of": "2026-10-14",
+  "fetched_at_utc": "2026-10-14T09:55:36Z",
   "counts": {
     "YAT": {
-      "universe_rows": 14202,
+      "universe_rows": 16227,
       "returns_rows": 2136,
       "fees_rows": 2097
     },
     "EMK": {
-      "universe_rows": 2800,
+      "universe_rows": 3200,
       "returns_rows": 0,
       "fees_rows": 0
     },
     "BYF": {
-      "universe_rows": 0,
+      "universe_rows": 288,
       "returns_rows": 0,
-      "fees_rows": 0
+      "fees_rows": 37
     },
     "GYF": {
       "universe_rows": 0,
-      "returns_rows": 0,
+      "returns_rows": 332,
       "fees_rows": 0
     },
     "GSYF": {
-      "universe_rows": 0,
+      "universe_rows": 4344,
       "returns_rows": 0,
       "fees_rows": 0
     }
