@@ -1,9 +1,9 @@
 {
   "as_of": "2026-10-23",
-  "fetched_at_utc": "2026-10-23T09:50:45Z",
+  "fetched_at_utc": "2026-10-24T09:23:04Z",
   "counts": {
     "YAT": {
-      "universe_rows": 18184,
+      "universe_rows": 18183,
       "returns_rows": 2141,
       "fees_rows": 2099
     },
