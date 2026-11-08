@@ -1,6 +1,6 @@
 {
   "as_of": "2026-11-06",
-  "fetched_at_utc": "2026-11-07T11:34:55Z",
+  "fetched_at_utc": "2026-11-08T11:47:59Z",
   "counts": {
     "YAT": {
       "universe_rows": 16133,
@@ -8,7 +8,7 @@
       "fees_rows": 2098
     },
     "EMK": {
-      "universe_rows": 3200,
+      "universe_rows": 0,
       "returns_rows": 0,
       "fees_rows": 0
     },
