@@ -1,14 +1,14 @@
 {
-  "as_of": "2026-11-13",
-  "fetched_at_utc": "2026-11-15T12:31:44Z",
+  "as_of": "2026-11-16",
+  "fetched_at_utc": "2026-11-16T13:24:08Z",
   "counts": {
     "YAT": {
-      "universe_rows": 18133,
+      "universe_rows": 14099,
       "returns_rows": 2136,
       "fees_rows": 2099
     },
     "EMK": {
-      "universe_rows": 3600,
+      "universe_rows": 2800,
       "returns_rows": 0,
       "fees_rows": 0
     },
