@@ -19,6 +19,8 @@ every visitor sees.
 from __future__ import annotations
 
 import json
+import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -61,8 +63,8 @@ def _group_ranks(returns_by_type: dict) -> dict:
 
 def _update_rank_change(today_str: str, today_ranks: dict) -> None:
     """Diff today's per-group rank against the last *different calendar
-    day's* stored rank (not the last run - this job fires several times
-    each morning, and a rank "change" should mean day-over-day, not
+    day's* stored rank (not the last run - this job may run more than once
+    a day (manual runs), and a rank "change" should mean day-over-day, not
     run-over-run). Writes rank_change.json: {group: {code: delta}} where
     delta > 0 means the fund moved up (better) since the previous day."""
     history_path = DATA_DIR / RANK_HISTORY_PATH_NAME
@@ -86,7 +88,27 @@ def _update_rank_change(today_str: str, today_ranks: dict) -> None:
     )
 
 
+MAX_ATTEMPTS = 4
+RETRY_WAIT_SECONDS = 90
+
+
 def main() -> None:
+    """Run _refresh() with retries. A scheduled run used to be repeated every
+    30 minutes to paper over transient TEFAS errors (429s, resets); retrying
+    here instead costs ~minutes, not whole extra workflow runs. A failure
+    after the last attempt exits non-zero so the workflow commits nothing."""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            _refresh()
+            return
+        except Exception as exc:  # noqa: BLE001 - any TEFAS/network/parse failure
+            print(f"attempt {attempt}/{MAX_ATTEMPTS} failed: {exc!r}", file=sys.stderr)
+            if attempt == MAX_ATTEMPTS:
+                raise
+            time.sleep(RETRY_WAIT_SECONDS * attempt)
+
+
+def _refresh() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     as_of = tf.last_business_day()
     start = as_of - timedelta(days=10)

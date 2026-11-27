@@ -64,9 +64,9 @@ güncelleniyor — gün içinde değişmiyor. Buna rağmen her ziyaretçinin say
 yüklemesinde TEFAS'a canlı istek atmak hem gereksiz hem yukarıdaki
 rate-limit'e yakalanma riskini artırıyordu.
 
-Bunun yerine `.github/workflows/data-refresh.yml`, **08:00-10:00 (Türkiye
-saati) arası 30 dakikada bir** `scripts/refresh_data.py`'yi çalıştırıp
-sonucu `data/` altına commit+push ediyor (Streamlit Cloud bu branch'i
+Bunun yerine `.github/workflows/data-refresh.yml`, **her gün 09:30'da
+(Türkiye saati)** `scripts/refresh_data.py`'yi çalıştırıp (geçici TEFAS
+hataları betiğin içinde yeniden denenir) sonucu `data/` altına commit+push ediyor (Streamlit Cloud bu branch'i
 izlediği için otomatik redeploy tetikleniyor). `app.py`'deki günlük/YTD
 tabloları önce bu dosyaları okuyor; dosya yoksa (ör. ilk deploy, workflow
 henüz hiç çalışmadıysa) `tefas_client.py` üzerinden canlı çekmeye

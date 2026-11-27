@@ -53,7 +53,7 @@ CACHE_TTL = 30 * 60  # 30 minutes
 
 # TEFAS's own prices only change once a day (typically evening); a
 # scheduled GitHub Actions run (.github/workflows/data-refresh.yml) fetches
-# the day's data every 30 minutes from 08:00-10:00 Turkey time and commits
+# the day's data once a day at 09:30 Turkey time and commits
 # it here, so the app can read it directly instead of every visitor's page
 # load calling TEFAS live - which is what was tripping the rate limit.
 DATA_DIR = Path(__file__).resolve().parent / "data"

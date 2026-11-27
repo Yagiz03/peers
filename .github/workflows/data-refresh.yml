@@ -2,13 +2,13 @@ name: TEFAS data refresh
 
 # TEFAS's own prices only change once a day (typically evening, after
 # markets close), not intraday. So instead of every app visitor triggering
-# a live TEFAS call, this fetches the day's data a few times during the
-# window it usually lands in and commits it - the app just reads these
-# files afterwards. 08:00-10:00 Turkey time (UTC+3, no DST) = 05:00-07:00
-# UTC, every 30 minutes.
+# a live TEFAS call, this fetches the day's data once, well after it has
+# landed, and commits it - the app just reads these files afterwards.
+# 09:30 Turkey time (UTC+3, no DST) = 06:30 UTC. Transient TEFAS errors are
+# retried inside scripts/refresh_data.py, not by extra scheduled runs.
 on:
   schedule:
-    - cron: "0,30 5-7 * * *"
+    - cron: "30 6 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -21,11 +21,13 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
       - run: pip install -r requirements.txt
       - run: python scripts/refresh_data.py
         env:
